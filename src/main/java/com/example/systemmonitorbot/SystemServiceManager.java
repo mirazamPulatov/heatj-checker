@@ -7,44 +7,72 @@ import org.springframework.stereotype.Service;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class SystemServiceManager {
 
     private static final Logger logger = LoggerFactory.getLogger(SystemServiceManager.class);
+    private static final String RUNNING_STATUS_IDENTIFIER = "Active: active (running)";
 
-    public String getServiceStatus(String serviceName) {
+    /**
+     * Executes a system command and returns its full output.
+     */
+    private String executeCommand(String... command) {
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder("systemctl", "is-active", serviceName);
-            processBuilder.redirectErrorStream(true);
-
+            ProcessBuilder processBuilder = new ProcessBuilder(command);
             Process process = processBuilder.start();
 
-            StringBuilder result = new StringBuilder();
+            StringBuilder output = new StringBuilder();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    result.append(line);
+                    output.append(line).append("\n");
                 }
             }
 
-            int exitCode = process.waitFor();
-            String output = result.toString().trim();
-
-            if (exitCode == 0) {
-                return output;
-            } else {
-                // is-active returns a non-zero exit code for inactive/failed statuses
-                if (output.isEmpty()) {
-                    return "unknown";
-                }
-                return output;
+            // Wait for the process to complete, with a timeout
+            if (!process.waitFor(10, TimeUnit.SECONDS)) {
+                logger.warn("Command timed out: {}", String.join(" ", command));
+                process.destroy();
+                return "Error: Command timed out.";
             }
+
+            // systemctl status returns exit code 3 for inactive/failed services
+            // We don't check the exit code here because we want the text output regardless.
+
+            return output.toString();
 
         } catch (IOException | InterruptedException e) {
-            logger.error("Error checking status of service {}: {}", serviceName, e.getMessage());
+            logger.error("Error executing command '{}': {}", String.join(" ", command), e.getMessage());
             Thread.currentThread().interrupt();
-            return "error";
+            return "Error: Could not execute command.";
         }
+    }
+
+    /**
+     * Gets the full, raw output of the 'systemctl status' command.
+     *
+     * @param serviceName The name of the service.
+     * @return The raw status output.
+     */
+    public String getRawServiceStatus(String serviceName) {
+        // Using "sudo" as per security requirements.
+        // The user running the bot must have passwordless sudo access for this command.
+        return executeCommand("sudo", "systemctl", "status", serviceName);
+    }
+
+    /**
+     * Determines if a service is running based on its status output.
+     *
+     * @param serviceName The name of the service.
+     * @return "running" if the service is active, "down" otherwise.
+     */
+    public String getServiceStatus(String serviceName) {
+        String rawStatus = getRawServiceStatus(serviceName);
+        if (rawStatus.contains(RUNNING_STATUS_IDENTIFIER)) {
+            return "running";
+        }
+        return "down";
     }
 }

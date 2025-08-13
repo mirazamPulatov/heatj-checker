@@ -4,12 +4,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.example</groupId>
-    <artifactId>system-monitor-bot</artifactId>
+    <artifactId>system-monitor-bot-prod</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>System Monitor Bot</name>
-    <description>A Telegram bot to monitor system services using systemctl.</description>
+    <name>System Monitor Bot (Production)</name>
+    <description>A production-ready Telegram bot to monitor system services using systemctl.</description>
 
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -33,11 +33,6 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>runtime</scope>
-        </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>

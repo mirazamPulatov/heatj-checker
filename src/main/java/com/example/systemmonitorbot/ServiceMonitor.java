@@ -11,48 +11,52 @@ import java.util.List;
 public class ServiceMonitor {
 
     private static final Logger logger = LoggerFactory.getLogger(ServiceMonitor.class);
+    private static final String STATUS_RUNNING = "running";
+    private static final String STATUS_DOWN = "down";
 
-    private final MonitoredServiceRepository monitoredServiceRepository;
+    private final MonitoredServiceRepository repository;
     private final SystemServiceManager systemServiceManager;
-    private final TelegramBotService telegramBotService;
+    private final TelegramBot telegramBot;
 
-    public ServiceMonitor(MonitoredServiceRepository monitoredServiceRepository,
-                          SystemServiceManager systemServiceManager,
-                          TelegramBotService telegramBotService) {
-        this.monitoredServiceRepository = monitoredServiceRepository;
+    public ServiceMonitor(MonitoredServiceRepository repository,
+                        SystemServiceManager systemServiceManager,
+                        TelegramBot telegramBot) {
+        this.repository = repository;
         this.systemServiceManager = systemServiceManager;
-        this.telegramBotService = telegramBotService;
+        this.telegramBot = telegramBot;
     }
 
-    @Scheduled(fixedRate = 600000) // 10 minutes
-    public void checkServiceStatus() {
-        logger.info("Running scheduled service status check...");
-        List<MonitoredService> services = monitoredServiceRepository.findAll();
+    @Scheduled(fixedDelay = 30000) // Check every 30 seconds, as per requirements.
+    public void checkServiceStatuses() {
+        logger.debug("Running scheduled service status check...");
+        List<MonitoredService> services = repository.findAll();
 
         for (MonitoredService service : services) {
             String currentStatus = systemServiceManager.getServiceStatus(service.getServiceName());
-            String lastKnownStatus = service.getLastKnownStatus();
+            String lastKnownStatus = service.getLastStatus();
 
+            // If we are checking for the first time, just record the status.
             if (lastKnownStatus == null) {
-                // First time checking, just update the status
-                service.setLastKnownStatus(currentStatus);
-                monitoredServiceRepository.save(service);
+                service.setLastStatus(currentStatus);
+                repository.save(service);
                 continue;
             }
 
-            boolean isCurrentlyActive = "active".equalsIgnoreCase(currentStatus);
-            boolean wasPreviouslyActive = "active".equalsIgnoreCase(lastKnownStatus);
+            boolean statusChanged = !currentStatus.equalsIgnoreCase(lastKnownStatus);
 
-            if (isCurrentlyActive && !wasPreviouslyActive) {
-                logger.info("Service {} is back up.", service.getServiceName());
-                telegramBotService.sendMessage(service.getChatId(), "✅ Service UP: " + service.getServiceName());
-                service.setLastKnownStatus(currentStatus);
-                monitoredServiceRepository.save(service);
-            } else if (!isCurrentlyActive && wasPreviouslyActive) {
-                logger.warn("Service {} is down.", service.getServiceName());
-                telegramBotService.sendMessage(service.getChatId(), "⚠ Service DOWN: " + service.getServiceName());
-                service.setLastKnownStatus(currentStatus);
-                monitoredServiceRepository.save(service);
+            if (statusChanged) {
+                logger.info("Status change for service '{}': {} -> {}", service.getServiceName(), lastKnownStatus, currentStatus);
+
+                // As per requirements, all alerts are sent to a single, configured channel,
+                // not back to the chat where the service was monitored.
+                if (STATUS_DOWN.equalsIgnoreCase(currentStatus)) {
+                    telegramBot.sendAlertToChannel("⚠ Service DOWN: `" + service.getServiceName() + "`");
+                } else if (STATUS_RUNNING.equalsIgnoreCase(currentStatus)) {
+                    telegramBot.sendAlertToChannel("✅ Service UP: `" + service.getServiceName() + "`");
+                }
+
+                service.setLastStatus(currentStatus);
+                repository.save(service);
             }
         }
     }
