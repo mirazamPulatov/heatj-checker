@@ -31,27 +31,33 @@ public class ServiceMonitor {
         logger.debug("Running scheduled service status check...");
         List<MonitoredService> services = repository.findAll();
 
-        for (MonitoredService service : services) {
-            String currentStatus = systemServiceManager.getServiceStatus(service.getServiceName());
-            String lastKnownStatus = service.getLastStatus();
+        for (var service : services) {
+            var currentStatus = systemServiceManager.getServiceStatus(service.getServiceName());
+            var lastKnownStatus = service.getLastStatus();
 
             // If we are checking for the first time, just record the status.
             if (lastKnownStatus == null) {
                 service.setLastStatus(currentStatus);
                 repository.save(service);
+                logger.info("Initial status for service '{}' is '{}'.", service.getServiceName(), currentStatus);
                 continue;
             }
 
             boolean statusChanged = !currentStatus.equalsIgnoreCase(lastKnownStatus);
 
             if (statusChanged) {
-                logger.info("Status change for service '{}': {} -> {}", service.getServiceName(), lastKnownStatus, currentStatus);
+                logger.info("Status change for service '{}' in chat {}: {} -> {}",
+                        service.getServiceName(), service.getChatId(), lastKnownStatus, currentStatus);
 
                 // Sending alert to the specific chat that is monitoring the service.
-                if (STATUS_DOWN.equalsIgnoreCase(currentStatus)) {
-                    telegramBot.sendMessage(service.getChatId(), "⚠ Service DOWN: `" + service.getServiceName() + "`");
-                } else if (STATUS_RUNNING.equalsIgnoreCase(currentStatus)) {
-                    telegramBot.sendMessage(service.getChatId(), "✅ Service UP: `" + service.getServiceName() + "`");
+                String alertText = switch (currentStatus) {
+                    case STATUS_DOWN -> String.format("⚠ Service DOWN: `%s`", service.getServiceName());
+                    case STATUS_RUNNING -> String.format("✅ Service UP: `%s`", service.getServiceName());
+                    default -> null;
+                };
+
+                if (alertText != null) {
+                    telegramBot.sendMessage(service.getChatId(), alertText);
                 }
 
                 service.setLastStatus(currentStatus);

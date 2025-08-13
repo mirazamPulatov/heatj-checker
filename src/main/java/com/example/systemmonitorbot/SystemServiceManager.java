@@ -4,9 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -14,39 +13,52 @@ public class SystemServiceManager {
 
     private static final Logger logger = LoggerFactory.getLogger(SystemServiceManager.class);
     private static final String RUNNING_STATUS_IDENTIFIER = "Active: active (running)";
+    private static final int COMMAND_TIMEOUT_SECONDS = 10;
+
+    // Using constants for commands to avoid magic strings and for easier management.
+    private static final String SUDO = "sudo";
+    private static final String SYSTEMCTL = "systemctl";
+    private static final String STATUS_ACTION = "status";
+    private static final String START_ACTION = "start";
+    private static final String STOP_ACTION = "stop";
 
     /**
      * Executes a system command and returns its full output.
+     * This method is private and encapsulates the ProcessBuilder logic.
      */
     private String executeCommand(String... command) {
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder(command);
-            Process process = processBuilder.start();
+            var processBuilder = new ProcessBuilder(command);
+            var process = processBuilder.start();
 
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
-            }
+            // Reading the output from the process's input stream
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
 
-            // Wait for the process to complete, with a timeout
-            if (!process.waitFor(10, TimeUnit.SECONDS)) {
+            if (!process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 logger.warn("Command timed out: {}", String.join(" ", command));
-                process.destroy();
+                process.destroyForcibly();
                 return "Error: Command timed out.";
             }
 
-            // systemctl status returns exit code 3 for inactive/failed services
-            // We don't check the exit code here because we want the text output regardless.
+            // systemctl status returns exit code 3 for inactive/failed services.
+            // For start/stop, a non-zero exit code indicates failure.
+            // We return the full output regardless, as it often contains useful error messages.
+            if (process.exitValue() != 0) {
+                 String errorOutput = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+                 if (!errorOutput.isBlank()) {
+                     return output + "\n" + errorOutput;
+                 }
+            }
 
-            return output.toString();
+            return output;
 
-        } catch (IOException | InterruptedException e) {
-            logger.error("Error executing command '{}': {}", String.join(" ", command), e.getMessage());
+        } catch (IOException e) {
+            logger.error("Error executing command '{}': {}", String.join(" ", command), e.getMessage(), e);
+            return "Error: Could not execute command due to an I/O error.";
+        } catch (InterruptedException e) {
+            logger.error("Command execution was interrupted: {}", String.join(" ", command), e);
             Thread.currentThread().interrupt();
-            return "Error: Could not execute command.";
+            return "Error: Command execution was interrupted.";
         }
     }
 
@@ -57,9 +69,7 @@ public class SystemServiceManager {
      * @return The raw status output.
      */
     public String getRawServiceStatus(String serviceName) {
-        // Using "sudo" as per security requirements.
-        // The user running the bot must have passwordless sudo access for this command.
-        return executeCommand("sudo", "systemctl", "status", serviceName);
+        return executeCommand(SUDO, SYSTEMCTL, STATUS_ACTION, serviceName);
     }
 
     /**
@@ -69,7 +79,7 @@ public class SystemServiceManager {
      * @return "running" if the service is active, "down" otherwise.
      */
     public String getServiceStatus(String serviceName) {
-        String rawStatus = getRawServiceStatus(serviceName);
+        var rawStatus = getRawServiceStatus(serviceName);
         if (rawStatus.contains(RUNNING_STATUS_IDENTIFIER)) {
             return "running";
         }
@@ -83,7 +93,7 @@ public class SystemServiceManager {
      * @return The command output.
      */
     public String startService(String serviceName) {
-        return executeCommand("sudo", "systemctl", "start", serviceName);
+        return executeCommand(SUDO, SYSTEMCTL, START_ACTION, serviceName);
     }
 
     /**
@@ -93,6 +103,6 @@ public class SystemServiceManager {
      * @return The command output.
      */
     public String stopService(String serviceName) {
-        return executeCommand("sudo", "systemctl", "stop", serviceName);
+        return executeCommand(SUDO, SYSTEMCTL, STOP_ACTION, serviceName);
     }
 }

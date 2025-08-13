@@ -42,19 +42,20 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        List<BotApiMethod<? extends Serializable>> responses = updateHandler.handleUpdate(update);
+        var responses = updateHandler.handleUpdate(update);
         if (responses != null && !responses.isEmpty()) {
-            for (BotApiMethod<?> response : responses) {
+            for (var response : responses) {
                 try {
-                    if (response instanceof SendMessage) {
-                        execute((SendMessage) response);
-                    } else if (response instanceof EditMessageText) {
-                        execute((EditMessageText) response);
-                    } else if (response instanceof AnswerCallbackQuery) {
-                        execute((AnswerCallbackQuery) response);
+                    // Using modern pattern matching for instanceof
+                    if (response instanceof SendMessage sendMessage) {
+                        execute(sendMessage);
+                    } else if (response instanceof EditMessageText editMessageText) {
+                        execute(editMessageText);
+                    } else if (response instanceof AnswerCallbackQuery answerCallbackQuery) {
+                        execute(answerCallbackQuery);
                     }
                 } catch (TelegramApiException e) {
-                    logger.error("Failed to execute response: {}", e.getMessage());
+                    logger.error("Failed to execute response of type {}: {}", response.getClass().getSimpleName(), e.getMessage());
                 }
             }
         }
@@ -65,7 +66,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     public void sendMessage(String chatId, String text) {
-        SendMessage message = new SendMessage();
+        var message = new SendMessage();
         message.setChatId(chatId);
         message.setText(text);
         message.setParseMode("Markdown");
