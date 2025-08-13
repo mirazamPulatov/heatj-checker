@@ -75,4 +75,24 @@ public class SystemServiceManager {
         }
         return "down";
     }
+
+    /**
+     * Starts a service using 'systemctl start'.
+     *
+     * @param serviceName The name of the service.
+     * @return The command output.
+     */
+    public String startService(String serviceName) {
+        return executeCommand("sudo", "systemctl", "start", serviceName);
+    }
+
+    /**
+     * Stops a service using 'systemctl stop'.
+     *
+     * @param serviceName The name of the service.
+     * @return The command output.
+     */
+    public String stopService(String serviceName) {
+        return executeCommand("sudo", "systemctl", "stop", serviceName);
+    }
 }

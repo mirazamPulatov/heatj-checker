@@ -74,7 +74,7 @@ The application uses `sudo systemctl status` to get detailed service information
 2.  Add the following line at the end of the file. Replace `your_run_user` with the actual username that will run the bot JAR file.
 
 ```
-your_run_user ALL=(ALL) NOPASSWD: /bin/systemctl status
+your_run_user ALL=(ALL) NOPASSWD: /bin/systemctl status, /bin/systemctl start, /bin/systemctl stop
 ```
 
 **Warning:** This is a critical security step. Ensure the path to `systemctl` is correct (`which systemctl` can help you find it) and that you only grant `NOPASSWD` access to this one command.

@@ -47,12 +47,11 @@ public class ServiceMonitor {
             if (statusChanged) {
                 logger.info("Status change for service '{}': {} -> {}", service.getServiceName(), lastKnownStatus, currentStatus);
 
-                // As per requirements, all alerts are sent to a single, configured channel,
-                // not back to the chat where the service was monitored.
+                // Sending alert to the specific chat that is monitoring the service.
                 if (STATUS_DOWN.equalsIgnoreCase(currentStatus)) {
-                    telegramBot.sendAlertToChannel("⚠ Service DOWN: `" + service.getServiceName() + "`");
+                    telegramBot.sendMessage(service.getChatId(), "⚠ Service DOWN: `" + service.getServiceName() + "`");
                 } else if (STATUS_RUNNING.equalsIgnoreCase(currentStatus)) {
-                    telegramBot.sendAlertToChannel("✅ Service UP: `" + service.getServiceName() + "`");
+                    telegramBot.sendMessage(service.getChatId(), "✅ Service UP: `" + service.getServiceName() + "`");
                 }
 
                 service.setLastStatus(currentStatus);
