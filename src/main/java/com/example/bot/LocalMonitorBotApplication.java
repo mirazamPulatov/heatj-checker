@@ -1,4 +1,4 @@
-package com.example.systemmonitorbot;
+package com.example.bot;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -6,10 +6,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-public class SystemMonitorBotApplication {
+public class LocalMonitorBotApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(SystemMonitorBotApplication.class, args);
+        SpringApplication.run(LocalMonitorBotApplication.class, args);
     }
-
 }
